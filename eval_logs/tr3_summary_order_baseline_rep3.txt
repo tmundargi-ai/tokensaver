@@ -1,0 +1,14 @@
+step 1: in=807 out=114
+  -> search_code({'pattern': 'format_summary'})
+step 2: in=1002 out=111
+  -> read_file({'path': 'report_pkg/report.py'})
+  -> read_file({'path': 'tests/test_report.py'})
+step 3: in=1623 out=300
+  -> edit_file({'new': 'def format_summary(orders: list[Order]) -> str:\n    totals = summarize(orders)\n    return "\\n".join(f"{oid}: ${total:.2f}" for oid, total in sorted(totals.items(), key=lambda kv: kv[1], reverse=True))', 'old': 'def format_summary(orders: list[Order]) -> str:\n    totals = summarize(orders)\n    return "\\n".join(f"{oid}: ${total:.2f}" for oid, total in sorted(totals.items()))', 'path': 'report_pkg/report.py'})
+step 4: in=1849 out=56
+  -> run_tests({})
+step 5: in=3864 out=351
+
+FINAL: Fixed `format_summary` in `report_pkg/report.py` to sort order totals from highest to lowest by changing the sort to use the total value with `reverse=True`, so the first line is the most expensive order; the target `test_format_summary_sorted_by_total` test now passes.
+
+TOTALS: {'task': 'format_summary should list orders from highest total to lowest, one per line.', 'mode': 'baseline', 'steps': 5, 'completed': True, 'edited_files': ['report_pkg/report.py'], 'reads_suppressed': 0, 'prompt_tokens': 9145, 'completion_tokens': 932, 'cached_tokens': 4932}

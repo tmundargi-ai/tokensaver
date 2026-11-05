@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# secrets
+.env
+
+# generated during runs
+sample_repo/
+runs.jsonl
+runs_*.jsonl
+
+# development archives (earlier runs, not part of the final result)
+eval_runs_*.jsonl
+results_*.md
+eval_logs_*/
+full_eval_output.txt
+nohup.out

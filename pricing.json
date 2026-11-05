@@ -1,0 +1,7 @@
+{
+  "model": "muse-spark-1.3",
+  "input_per_m": 1.25,
+  "cached_input_per_m": 0.15,
+  "output_per_m": 4.25,
+  "note": "USD per 1M tokens, taken from the Model API pricing screenshot. Confirm units on the pricing page before publishing."
+}
