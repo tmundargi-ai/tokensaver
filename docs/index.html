@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TokenSaver</title>
+<style>
+  :root {
+    color-scheme: dark light;
+    --bg: #0d0e11; --panel: #15171c; --line: #272a32;
+    --text: #e9eaed; --muted: #8b909b;
+    --accent: #e0a94a; --pass: #74c58f; --fail: #e47a7a;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5f4f0; --panel: #ffffff; --line: #dcd9d1;
+      --text: #1b1c20; --muted: #62666f;
+      --accent: #9a6400; --pass: #2d7a48; --fail: #b03a3a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans);
+         padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 1.25rem; }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .muted { color: var(--muted); }
+
+  header.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); }
+  header.bar .wrap { display: flex; gap: 1.1rem; align-items: center; min-height: 46px; flex-wrap: wrap; }
+  header.bar .brand { font: 600 14px var(--mono); margin-right: auto; }
+  header.bar a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  header.bar a:hover, header.bar a:focus-visible { color: var(--text); }
+  .progress { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--accent); width: 0; }
+
+  section { padding: 4rem 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: 0; }
+  .kicker { font: 12px var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: .09em; margin-bottom: .4rem; }
+  h1 { font-size: clamp(2.6rem, 7vw, 4.6rem); line-height: 1.04; letter-spacing: -.02em; margin: .2rem 0 .6rem; }
+  h2 { font-size: clamp(1.5rem, 3vw, 2rem); margin: 0 0 .5rem; letter-spacing: -.01em; }
+  h3 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+  .lede { color: var(--muted); max-width: 62ch; font-size: 1.05rem; margin: 0 0 1rem; }
+
+  /* hero */
+  .hero { padding: 4.5rem 0 3.5rem; }
+  .hero .sub { max-width: 60ch; color: var(--muted); }
+  .counters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 2.5rem; }
+  .counter { background: var(--bg); padding: 1.1rem 1.1rem 1rem; }
+  .counter .v { font: 600 clamp(1.7rem, 4vw, 2.5rem) var(--mono); font-variant-numeric: tabular-nums; }
+  .counter .l { color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: .25rem; }
+  .matrix { font: 14px var(--mono); color: var(--muted); margin-top: 1.4rem; }
+  .matrix b { color: var(--text); font-weight: 500; }
+  .source { font: 12px var(--mono); color: var(--muted); margin-top: 1rem; }
+  @media (max-width: 760px) { .counters { grid-template-columns: repeat(2, 1fr); } }
+
+  /* loop */
+  .loop { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 2rem 0 1rem; border: 1px solid var(--line); }
+  .loop .node { padding: 1rem .8rem; border-right: 1px solid var(--line); transition: background .35s, color .35s; min-width: 0; }
+  .loop .node:last-child { border-right: 0; }
+  .loop .node .n { font: 12px var(--mono); color: var(--muted); }
+  .loop .node .t { font-weight: 600; margin: .25rem 0 .2rem; }
+  .loop .node .d { font-size: 13px; color: var(--muted); line-height: 1.45; }
+  .loop .node.lit { background: var(--panel); }
+  .loop .node.lit .t { color: var(--accent); }
+  .loop .node.lit .n { color: var(--accent); }
+  .loop-note { font-size: 14px; color: var(--muted); max-width: 70ch; }
+  .loop-note b { color: var(--text); font-weight: 500; }
+  @media (max-width: 860px) { .loop { grid-template-columns: 1fr; } .loop .node { border-right: 0; border-bottom: 1px solid var(--line); } }
+
+  /* controls */
+  .controls { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; margin: 1.2rem 0; }
+  .controls label { font: 12px var(--mono); color: var(--muted); display: grid; gap: .25rem; }
+  select, button.btn { font: 14px var(--mono); background: var(--panel); color: var(--text); border: 1px solid var(--line); padding: .45rem .75rem; border-radius: 3px; cursor: pointer; }
+  button.btn:hover { border-color: var(--muted); }
+  button.btn[aria-pressed="true"], button.btn.primary { border-color: var(--accent); color: var(--accent); }
+  button.btn:disabled { opacity: .4; cursor: default; }
+
+  /* replay */
+  .split { display: grid; grid-template-columns: minmax(230px, 300px) 1fr; gap: 1.5rem; align-items: start; }
+  @media (max-width: 820px) { .split { grid-template-columns: 1fr; } }
+  dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: .32rem 1rem; margin: 0; font: 13px var(--mono); }
+  dl.meta dt { color: var(--muted); } dl.meta dd { margin: 0; overflow-wrap: anywhere; }
+  .pass { color: var(--pass); } .fail { color: var(--fail); } .na { color: var(--muted); }
+  .gates { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); margin-bottom: 1rem; }
+  .gate { padding: .65rem .55rem; border-right: 1px solid var(--line); font: 12px var(--mono); min-width: 0; opacity: .35; transition: opacity .4s, background .4s; }
+  .gate:last-child { border-right: 0; }
+  .gate .n { color: var(--muted); } .gate .s { font-weight: 600; margin-top: .2rem; }
+  .gate.on { opacity: 1; background: var(--panel); }
+  @media (max-width: 820px) { .gates { grid-template-columns: 1fr; } .gate { border-right: 0; border-bottom: 1px solid var(--line); } }
+  .trace { border: 1px solid var(--line); background: var(--panel); min-height: 240px; max-height: 480px; overflow: auto; padding: .4rem 0; }
+  .ev { display: grid; grid-template-columns: 2.2rem 1fr; gap: .5rem; padding: .45rem .8rem; font: 13px/1.5 var(--mono); opacity: 0; transform: translateY(4px); transition: opacity .3s, transform .3s; }
+  .ev.in { opacity: 1; transform: none; }
+  .ev .i { color: var(--muted); }
+  .ev .tool { color: var(--accent); }
+  .ev .args { color: var(--muted); overflow-wrap: anywhere; }
+  .ev.trunc { background: rgba(224,169,74,.09); box-shadow: inset 3px 0 0 var(--accent); }
+  .ev .tag { display: inline-block; font: 11px var(--mono); color: var(--accent); border: 1px solid var(--accent); padding: 0 .35rem; margin-left: .4rem; border-radius: 2px; }
+  .ev.end { color: var(--muted); }
+  .ev.end .tool { color: var(--text); }
+  .placeholder { padding: 1.2rem; color: var(--muted); font-size: 14px; margin: 0; }
+  .tags { display: flex; gap: .4rem; flex-wrap: wrap; margin: .4rem 0 .6rem; min-height: 1.6rem; }
+  .tag { font: 11px var(--mono); padding: .15rem .45rem; border: 1px solid; border-radius: 2px; }
+  .tag.trunc { color: var(--accent); border-color: var(--accent); }
+  .tag.reread { color: var(--pass); border-color: var(--pass); }
+  .note { font-size: 14px; color: var(--muted); margin-top: .8rem; max-width: 70ch; }
+
+  /* benchmark */
+  .bars { display: grid; gap: .55rem; margin: .8rem 0; }
+  .bar-row { display: grid; grid-template-columns: 170px 1fr 110px; gap: .8rem; align-items: center; font: 13px var(--mono); }
+  .track { height: 14px; background: var(--panel); border: 1px solid var(--line); position: relative; overflow: hidden; }
+  .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--muted); transition: width .9s cubic-bezier(.2,.7,.2,1); }
+  .fill.k2 { background: var(--text); opacity: .65; }
+  .fill.k3 { background: var(--accent); }
+  .bar-row .val { text-align: right; font-variant-numeric: tabular-nums; }
+  .grp { font: 13px var(--mono); color: var(--muted); margin: 1.1rem 0 .1rem; }
+  .legend { display: flex; gap: 1rem; font: 12px var(--mono); color: var(--muted); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: .35rem; vertical-align: -1px; }
+  @media (max-width: 720px) { .bar-row { grid-template-columns: 1fr; gap: .25rem; } .bar-row .val { text-align: left; } }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font: 13px var(--mono); }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; }
+  td.n, th.n { text-align: right; }
+
+  /* reread */
+  .dots { display: flex; gap: .55rem; flex-wrap: wrap; margin: .8rem 0 1rem; }
+  .dot { width: 34px; height: 34px; border: 1px solid var(--line); background: var(--panel); font: 12px var(--mono); color: var(--muted); cursor: pointer; }
+  .dot.sup { border-color: var(--pass); color: var(--pass); }
+  .dot[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--text); }
+  .dotrow { display: grid; grid-template-columns: 110px 1fr; gap: .5rem 1rem; align-items: center; margin: .35rem 0; }
+  .dotrow .lbl { font: 13px var(--mono); color: var(--muted); }
+  .lane { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--line); margin-top: .8rem; }
+  .lane .step { padding: .75rem .6rem; border-right: 1px solid var(--line); font: 13px/1.4 var(--mono); opacity: .3; transition: opacity .4s; min-width: 0; overflow-wrap: anywhere; }
+  .lane .step:last-child { border-right: 0; }
+  .lane .step.on { opacity: 1; }
+  .lane .step .k { color: var(--muted); font-size: 11px; }
+  .lane .step.sup { color: var(--pass); }
+  @media (max-width: 760px) { .lane { grid-template-columns: 1fr; } .lane .step { border-right: 0; border-bottom: 1px solid var(--line); } }
+
+  /* architecture */
+  .arch { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.2rem; }
+  .lane-box { border: 1px solid var(--line); background: var(--panel); padding: 1rem 1.1rem; }
+  .lane-box h3 { margin: 0 0 .6rem; font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+  .lane-box ol { margin: 0; padding-left: 1.2rem; font: 13px/1.5 var(--mono); }
+  .lane-box li { margin: .4rem 0; }
+  .lane-box li span { display: block; color: var(--muted); font: 13px/1.5 var(--sans); }
+  @media (max-width: 820px) { .arch { grid-template-columns: 1fr; } }
+
+  details.file { border: 1px solid var(--line); background: var(--panel); margin: .45rem 0; }
+  details.file summary { padding: .6rem .85rem; cursor: pointer; font: 13px var(--mono); }
+  details.file p { margin: 0; padding: .6rem .9rem .85rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+  .results p { max-width: 70ch; color: var(--muted); }
+  .callout { border-left: 3px solid var(--accent); padding: .7rem 1rem; background: var(--panel); margin: 1.2rem 0; color: var(--muted); font-size: 14px; max-width: 75ch; }
+  .callout strong { color: var(--text); font-weight: 500; }
+  ul.plain { padding-left: 1.2rem; color: var(--muted); max-width: 74ch; }
+  ul.plain li { margin: .45rem 0; }
+  ul.plain b { color: var(--text); font-weight: 500; }
+
+  .reveal { opacity: 0; transform: translateY(10px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.seen { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+    .reveal { opacity: 1; transform: none; }
+  }
+  footer { color: var(--muted); font-size: 13px; padding: 2.5rem 0 3.5rem; }
+</style>
+</head>
+<body>
+
+<header class="bar"><div class="wrap">
+  <span class="brand">tokensaver</span>
+  <a href="#loop">Loop</a>
+  <a href="#replay">Run replay</a>
+  <a href="#benchmark">Benchmark</a>
+  <a href="#reread">Repeat reads</a>
+  <a href="#truncation">Truncation</a>
+  <a href="#gates">Scoring</a>
+  <a href="#system">System</a>
+  <a href="#limits">Limits</a>
+</div><div class="progress" id="progress"></div></header>
+
+<main class="wrap">
+
+<section class="hero" id="top">
+  <div class="kicker">Experiment · Muse Spark 1.3</div>
+  <h1>TokenSaver</h1>
+  <p class="sub">Can a coding agent send less text to the model and still finish the job? This harness tests two changes to tool output, and scores every run against the repo's own tests.</p>
+  <div class="counters">
+    <div class="counter"><div class="v"><span class="count" data-to="60" data-dec="0">60</span></div><div class="l">evaluated runs</div></div>
+    <div class="counter"><div class="v">−<span class="count" data-to="11.5" data-dec="1">11.5</span>%</div><div class="l">average prompt tokens, baseline to optimized</div></div>
+    <div class="counter"><div class="v">−<span class="count" data-to="18.3" data-dec="1">18.3</span>%</div><div class="l">average cost per run, baseline to optimized</div></div>
+    <div class="counter"><div class="v"><span class="count" data-to="100" data-dec="0">100</span>%</div><div class="l">pass rate, all three modes</div></div>
+  </div>
+  <div class="matrix">4 tasks <b>×</b> 3 modes <b>×</b> 5 repeats <b>=</b> 60 runs</div>
+  <p class="source" id="source-line">Loading data…</p>
+</section>
+
+<section id="loop">
+  <div class="kicker">The loop</div>
+  <h2>What happens in one run</h2>
+  <p class="lede">The model asks for a tool, the harness runs it, and the result goes back into the conversation. Every later step resends that conversation, so long outputs cost more on every step after they appear.</p>
+  <div class="loop" id="loop-nodes" aria-hidden="true">
+    <div class="node" data-n="0"><div class="n">01</div><div class="t">Task</div><div class="d">A bug report and the test command that defines success.</div></div>
+    <div class="node" data-n="1"><div class="n">02</div><div class="t">Model</div><div class="d">Muse Spark 1.3 replies with text or a tool call.</div></div>
+    <div class="node" data-n="2"><div class="n">03</div><div class="t">Tools</div><div class="d">read_file, search_code, edit_file, run_tests, limited to the repo.</div></div>
+    <div class="node" data-n="3"><div class="n">04</div><div class="t">Optimizer</div><div class="d">Long output is shortened. Unchanged re-reads are answered with a note.</div></div>
+    <div class="node" data-n="4"><div class="n">05</div><div class="t">Evaluator</div><div class="d">After the agent exits, the harness resets the repo and scores the result.</div></div>
+  </div>
+  <p class="loop-note">Steps 02 to 04 happen inside the agent run. Step 05 runs afterwards, in <code>evaluate.py</code>, and the model never sees it.</p>
+</section>
+
+<section id="replay">
+  <div class="kicker">Run explorer</div>
+  <h2>Replay a real run</h2>
+  <p class="lede">Pick a task, mode, and repeat, then replay the tool calls from that run's log. Nothing here is generated. If a run has no trace loaded, the page says so.</p>
+  <div class="controls">
+    <label>Task <select id="f-task"></select></label>
+    <label>Mode <select id="f-mode"></select></label>
+    <label>Repeat <select id="f-rep"></select></label>
+    <button class="btn primary" id="btn-replay" type="button">Replay</button>
+    <button class="btn" id="btn-skip" type="button">Show all</button>
+  </div>
+  <div class="split">
+    <div>
+      <dl class="meta" id="meta"></dl>
+    </div>
+    <div>
+      <div class="gates" id="gates" aria-label="Evaluation gates"></div>
+      <div class="tags" id="tags"></div>
+      <div class="trace" id="trace" role="log" aria-live="polite" aria-label="Agent trace"></div>
+      <p class="note" id="replay-note"></p>
+    </div>
+  </div>
+</section>
+
+<section id="benchmark" class="reveal" data-reveal="1">
+  <div class="kicker">Benchmark</div>
+  <h2>Three modes, side by side</h2>
+  <p class="lede">Baseline is the agent as written. Truncate-only shortens long output and leaves the read cache off, so it isolates truncation. Optimized adds the read cache.</p>
+  <div class="controls">
+    <button class="btn" type="button" data-view="aggregate" aria-pressed="true">Aggregate</button>
+    <button class="btn" type="button" data-view="task" aria-pressed="false">By task</button>
+    <label>Metric <select id="metric"></select></label>
+  </div>
+  <div id="bench-out"></div>
+</section>
+
+<section id="reread" class="reveal" data-reveal="1">
+  <div class="kicker">Repeat reads</div>
+  <h2>Task 4 asks for a second read</h2>
+  <p class="lede">Task 4 tells the agent to read <code>report.py</code>, change <code>pricing.py</code>, then read <code>report.py</code> again. Each dot below is one of the five runs in that mode. Green dots had at least one re-read suppressed.</p>
+  <div id="dots"></div>
+  <div class="lane" id="lane" aria-live="polite"></div>
+  <p class="note" id="reread-note"></p>
+</section>
+
+<section id="truncation" class="reveal" data-reveal="1">
+  <div class="kicker">Truncation</div>
+  <h2>Where truncation fired</h2>
+  <p class="lede">When a tool result is over 60 lines, the optimizer keeps the first 20 and last 20 lines, plus any error or failure lines from the middle. Pick a run where it fired and look at the call it applied to.</p>
+  <div class="controls">
+    <label>Truncated run <select id="trunc-select"></select></label>
+  </div>
+  <div id="trunc-out"></div>
+</section>
+
+<section id="gates" class="reveal" data-reveal="1">
+  <div class="kicker">Scoring</div>
+  <h2>A finished run is not a passing run</h2>
+  <p class="lede">The model saying it's done doesn't count. After the agent exits, the harness restores the original repo and runs the tests on the result. A run passes only if all four checks hold.</p>
+  <div class="gates" id="gates-static" style="margin-top:1.2rem"></div>
+  <ul class="plain">
+    <li><b>Finished:</b> the agent ended before the 15-step limit.</li>
+    <li><b>Target tests:</b> the tests for this task pass. For task 3, a hidden test is also run.</li>
+    <li><b>Protected tests:</b> every other test still passes, so the agent didn't break unrelated code.</li>
+    <li><b>Scope:</b> the agent only edited files its task allows.</li>
+  </ul>
+</section>
+
+<section id="results" class="results reveal" data-reveal="1">
+  <div class="kicker">Results</div>
+  <h2>Effects by task</h2>
+  <p>Averages can hide differences, so each task is listed. Truncation fired on tr1, tr3, and tr4, and never on tr2.</p>
+  <div class="scroll"><table id="task-table"></table></div>
+  <div class="callout"><strong>tr2 goes the other way on prompt size.</strong> Its optimized average (8,223) is above baseline (7,820). One optimized run used 9,860 prompt tokens and the others averaged about 7,815. Cost on tr2 is still lower in optimized mode, but cache hits vary more between runs than prompt size does, so treat that cost difference as noisy.</div>
+</section>
+
+<section id="system" class="reveal" data-reveal="1">
+  <div class="kicker">System</div>
+  <h2>Two halves, one run</h2>
+  <div class="arch">
+    <div class="lane-box">
+      <h3>Agent execution · agent.py</h3>
+      <ol>
+        <li>Task sent as the user message<span>Task text and the tool list go to the model.</span></li>
+        <li>Model returns text or tool calls<span>Muse Spark 1.3 through the Meta Model API.</span></li>
+        <li>Tools run<span>Limited to the repo. Paths outside it are rejected.</span></li>
+        <li>Optimizer handles the output<span>Truncation in every truncating mode. Read cache in optimized mode only.</span></li>
+        <li>Loop repeats<span>Stops when the model makes no tool call, or at 15 steps.</span></li>
+      </ol>
+    </div>
+    <div class="lane-box">
+      <h3>Post-run evaluation · evaluate.py</h3>
+      <ol>
+        <li>Repo reset<span>Copied fresh from the original before each run.</span></li>
+        <li>Finished check<span>Read from the run record.</span></li>
+        <li>Target and protected tests<span>Run by the harness, not by the agent.</span></li>
+        <li>Scope check<span>Edited files compared against the task's allowed list.</span></li>
+        <li>Records written<span>eval_runs.jsonl, eval_logs/, results.md.</span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section id="repo" class="reveal" data-reveal="1">
+  <div class="kicker">Repository</div>
+  <h2>The parts</h2>
+  <p class="lede">Each component, and what it does according to the code.</p>
+  <details class="file"><summary>agent.py</summary><p>The loop. Sends messages and tool definitions to Muse Spark 1.3, runs the requested tools, appends the results, and writes one record per run to runs.jsonl. The API key comes from the environment.</p></details>
+  <details class="file"><summary>tools.py</summary><p>read_file, edit_file (replaces exactly one match), search_code (grep over .py files), and run_tests (pytest). Every path is resolved and rejected if it lands outside the repo.</p></details>
+  <details class="file"><summary>optimize.py</summary><p>truncate_output keeps the first and last 20 lines of long output plus error lines from the middle. ReadCache hashes each file it returns and answers an unchanged re-read with a short note.</p></details>
+  <details class="file"><summary>evaluate.py</summary><p>The harness. Resets the repo, runs the agent as a subprocess, retries runs that produced no record, runs the target and protected tests, checks scope, and writes the result files.</p></details>
+  <details class="file"><summary>tasks_trigger.json</summary><p>The four tasks in the final experiment. Each one lists its description, target tests, and allowed files.</p></details>
+  <details class="file"><summary>pricing.json</summary><p>USD per million tokens for muse-spark-1.3: input $1.25, cached input $0.15, output $4.25. Output includes reasoning tokens.</p></details>
+  <details class="file"><summary>eval_runs.jsonl and eval_logs/</summary><p>One record per evaluated run, and the printed output of each run. The replay and truncation views read from these.</p></details>
+  <details class="file"><summary>trigger_repo_original/</summary><p>The test repo: four modules with deliberate failures. It is copied fresh before every run, so runs don't share state.</p></details>
+</section>
+
+<section id="limits" class="reveal" data-reveal="1">
+  <div class="kicker">Limits</div>
+  <h2>What this does and doesn't show</h2>
+  <ul class="plain">
+    <li><b>One model, one synthetic repo, four tasks.</b> These results describe this suite. They say little about coding agents in general.</li>
+    <li><b>Prompt tokens are the main measure.</b> Cost moves with cache hits, which vary between runs more than prompt size does.</li>
+    <li><b>The read cache is not proven to save money here.</b> It fired as designed, on the one task built to force a re-read, but its effect is inside run-to-run noise.</li>
+    <li><b>Task 4 asks for the re-read.</b> The agent is told to read the file twice. The data shows the mechanism works, not that the agent would do this on its own.</li>
+    <li><b>Traces are only as complete as the logs.</b> The logs record each tool call and the truncation marker, but not the full text of the output that was shortened.</li>
+  </ul>
+</section>
+
+</main>
+
+<footer class="wrap">TokenSaver · numbers from results.md and eval_runs.jsonl · pricing from pricing.json</footer>
+
+<script>
+(() => {
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MODES = ['baseline', 'truncate-only', 'optimized'];
+const MODE_LABEL = { baseline: 'Baseline', 'truncate-only': 'Truncate-only', optimized: 'Optimized' };
+const TASK_NAME = {
+  tr1_heavy_surcharge: 'tr1 heavy surcharge',
+  tr2_grand_total: 'tr2 grand total',
+  tr3_summary_order: 'tr3 summary order',
+  tr4_reject_discount: 'tr4 reject discount',
+};
+const TASK_IDS = Object.keys(TASK_NAME);
+const REPS = [1, 2, 3, 4, 5];
+
+// Final-run aggregates from results.md.
+const AGG = {
+  baseline:        { prompt: 10485, cost: 0.0120, cached: 5683, output: 1202, steps: 5.8, reads: 0.0 },
+  'truncate-only': { prompt:  9429, cost: 0.0105, cached: 6216, output: 1308, steps: 5.9, reads: 0.0 },
+  optimized:       { prompt:  9284, cost: 0.0098, cached: 6523, output: 1271, steps: 5.8, reads: 0.2 },
+};
+const METRICS = {
+  prompt: { label: 'Prompt tokens', fmt: v => Math.round(v).toLocaleString('en-US') },
+  cost:   { label: 'Cost per run', fmt: v => '$' + v.toFixed(4) },
+  cached: { label: 'Cached tokens', fmt: v => Math.round(v).toLocaleString('en-US') },
+  output: { label: 'Output tokens', fmt: v => Math.round(v).toLocaleString('en-US') },
+  steps:  { label: 'Average steps', fmt: v => v.toFixed(1) },
+  reads:  { label: 'Reads suppressed', fmt: v => v.toFixed(1) },
+};
+// Per-task averages from results.md.
+const BYTASK = {
+  tr1_heavy_surcharge: { prompt: [8549, 7320, 6962], cost: [0.0090, 0.0077, 0.0069] },
+  tr2_grand_total:     { prompt: [7820, 8081, 8223], cost: [0.0091, 0.0094, 0.0083] },
+  tr3_summary_order:   { prompt: [9088, 7704, 7764], cost: [0.0109, 0.0078, 0.0080] },
+  tr4_reject_discount: { prompt: [16484, 14613, 14189], cost: [0.0188, 0.0171, 0.0161] },
+};
+// Per-run prompt tokens from the final eval logs. Used only if dataset.json is missing.
+const SNAPSHOT = [
+  ['tr1_heavy_surcharge', 'baseline',      [8637, 8640, 8189, 8640, 8640], false],
+  ['tr1_heavy_surcharge', 'truncate-only', [6791, 6760, 6796, 9047, 7207], true],
+  ['tr1_heavy_surcharge', 'optimized',     [6789, 7245, 7246, 6745, 6784], true],
+  ['tr2_grand_total',     'baseline',      [7803, 7833, 7832, 7815, 7819], false],
+  ['tr2_grand_total',     'truncate-only', [7814, 7818, 9150, 7803, 7821], false],
+  ['tr2_grand_total',     'optimized',     [9860, 7825, 7815, 7811, 7804], false],
+  ['tr3_summary_order',   'baseline',      [9047, 9144, 9145, 9060, 9043], false],
+  ['tr3_summary_order',   'truncate-only', [7706, 7693, 7714, 7695, 7710], true],
+  ['tr3_summary_order',   'optimized',     [7701, 7727, 7796, 7798, 7797], true],
+  ['tr4_reject_discount', 'baseline',      [13374, 15050, 19450, 19536, 15009], false],
+  ['tr4_reject_discount', 'truncate-only', [13621, 13602, 16838, 12061, 16942], true],
+  ['tr4_reject_discount', 'optimized',     [16426, 13174, 11635, 16471, 13241], true],
+];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtInt = v => Math.round(v).toLocaleString('en-US');
+const timers = [];
+const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+const clearLater = () => { while (timers.length) clearTimeout(timers.pop()); };
+
+let DATA = { source: 'snapshot', runs: [] };
+
+function snapshotRuns() {
+  const out = [];
+  for (const [task, mode, prompts, truncated] of SNAPSHOT) {
+    prompts.forEach((p, i) => out.push({
+      task, mode, rep: i + 1, pass: true, prompt: p, truncated,
+      finished: null, out_of_scope: null, target_failures: null, protected_failures: null,
+      steps: null, cached: null, output: null, reads: null, cost: null,
+      edited: null, trace: null,
+    }));
+  }
+  return out;
+}
+
+async function loadData() {
+  DATA.runs = snapshotRuns();
+  try {
+    const res = await fetch('dataset.json', { cache: 'no-store' });
+    if (res.ok) {
+      const j = await res.json();
+      DATA = { source: 'export', runs: j.runs, generated: j.generated };
+    }
+  } catch (e) { /* offline or file://: keep the snapshot */ }
+  $('#source-line').textContent = DATA.source === 'export'
+    ? `Data: dataset.json, exported ${DATA.generated}. Traces and per-run costs loaded.`
+    : 'Data: built-in snapshot. Run export_dataset.py to load traces and per-run costs.';
+}
+
+const getRun = (task, mode, rep) => DATA.runs.find(r => r.task === task && r.mode === mode && r.rep === rep);
+
+/* ---------- motion on scroll ---------- */
+function countUp(el) {
+  const to = parseFloat(el.textContent) || 0;
+  const dec = (el.textContent.split('.')[1] || '').length;
+  if (REDUCED) return;
+  const start = performance.now(), dur = 1100;
+  el.textContent = (0).toFixed(dec);
+  const tick = now => {
+    const p = Math.min(1, (now - start) / dur);
+    el.textContent = (to * (1 - Math.pow(1 - p, 3))).toFixed(dec);
+    if (p < 1) requestAnimationFrame(tick);
+    else el.textContent = to.toFixed(dec);
+  };
+  requestAnimationFrame(tick);
+}
+
+function lightLoop() {
+  const nodes = [...document.querySelectorAll('#loop-nodes .node')];
+  if (REDUCED) { nodes.forEach(n => n.classList.add('lit')); return; }
+  let i = 0;
+  const pulse = () => {
+    nodes.forEach(n => n.classList.remove('lit'));
+    nodes[i].classList.add('lit');
+    i = (i + 1) % nodes.length;
+  };
+  pulse();
+  const id = setInterval(pulse, 900);
+  setTimeout(() => clearInterval(id), 900 * nodes.length * 2);
+}
+
+const seen = new WeakSet();
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (!e.isIntersecting || seen.has(e.target)) return;
+    seen.add(e.target);
+    e.target.classList.add('seen');
+    if (e.target.id === 'loop') lightLoop();
+    if (e.target.id === 'gates') fillGatesStatic();
+  });
+}, { threshold: 0.25 });
+
+function setupMotion() {
+  document.querySelectorAll('[data-reveal]').forEach(el => io.observe(el));
+  const loop = document.querySelector('#loop');
+  io.observe(loop);
+  const counters = document.querySelectorAll('.count');
+  const cio = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { countUp(e.target); cio.unobserve(e.target); }
+  }), { threshold: 0.6 });
+  counters.forEach(c => cio.observe(c));
+  // Reading progress bar in the header.
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = (h > 0 ? (scrollY / h) * 100 : 0) + '%';
+  };
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* ---------- run replay ---------- */
+function fillSelectors() {
+  $('#f-task').innerHTML = TASK_IDS.map(t => `<option value="${t}">${TASK_NAME[t]}</option>`).join('');
+  $('#f-mode').innerHTML = MODES.map(m => `<option value="${m}">${MODE_LABEL[m]}</option>`).join('');
+  $('#f-rep').innerHTML = REPS.map(r => `<option value="${r}">Repeat ${r}</option>`).join('');
+  ['#f-task', '#f-mode', '#f-rep'].forEach(s => $(s).addEventListener('change', showRun));
+  $('#btn-replay').addEventListener('click', replay);
+  $('#btn-skip').addEventListener('click', showAll);
+}
+
+const gateState = v => v === true ? ['PASS', 'pass'] : v === false ? ['FAIL', 'fail'] : ['n/a', 'na'];
+
+function gateValues(r) {
+  return [
+    ['01', 'Finished', r.finished],
+    ['02', 'Target tests', r.target_failures == null ? null : r.target_failures.length === 0],
+    ['03', 'Protected', r.protected_failures == null ? null : r.protected_failures.length === 0],
+    ['04', 'Scope', r.out_of_scope == null ? null : r.out_of_scope.length === 0],
+    ['05', 'Result', r.pass],
+  ];
+}
+
+function renderGates(r, lit) {
+  $('#gates').innerHTML = gateValues(r).map(([n, label, v], i) => {
+    const [txt, cls] = gateState(v);
+    const on = lit > i ? ' on' : '';
+    return `<div class="gate${on}"><div class="n">${n}</div><div>${label}</div><div class="s ${cls}">${txt}</div></div>`;
+  }).join('');
+}
+
+function renderMeta(r, task, mode, rep) {
+  const sv = (v, f = x => x) => v == null ? '<span class="na">not in dataset</span>' : f(v);
+  $('#meta').innerHTML = [
+    ['task', TASK_NAME[task]],
+    ['mode', MODE_LABEL[mode]],
+    ['repeat', rep],
+    ['result', `<span class="${r.pass ? 'pass' : 'fail'}">${r.pass ? 'PASS' : 'FAIL'}</span>`],
+    ['steps', sv(r.steps)],
+    ['prompt tokens', sv(r.prompt, fmtInt)],
+    ['cached tokens', sv(r.cached, fmtInt)],
+    ['output tokens', sv(r.output, fmtInt)],
+    ['reads suppressed', sv(r.reads)],
+    ['cost', sv(r.cost, v => '$' + v.toFixed(4))],
+    ['edited files', r.edited == null ? '<span class="na">not in dataset</span>' : (r.edited.length ? esc(r.edited.join(', ')) : 'none')],
+  ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+}
+
+function renderTags(r) {
+  const t = [];
+  if (r.truncated) t.push('<span class="tag trunc">TRUNCATION APPLIED</span>');
+  if (r.reads > 0) t.push('<span class="tag reread">REPEATED READ SUPPRESSED</span>');
+  $('#tags').innerHTML = t.join(' ');
+}
+
+function eventHTML(c, i) {
+  const mark = c.truncated ? '<span class="tag">TRUNCATION APPLIED</span>' : '';
+  return `<div class="ev${c.truncated ? ' trunc' : ''}"><span class="i">${i + 1}</span><span><span class="tool">${esc(c.tool)}</span> <span class="args">${esc(c.args)}</span>${mark}</span></div>`;
+}
+
+function showRun() {
+  clearLater();
+  const task = $('#f-task').value, mode = $('#f-mode').value, rep = Number($('#f-rep').value);
+  const r = getRun(task, mode, rep);
+  if (!r) return;
+  renderMeta(r, task, mode, rep);
+  renderTags(r);
+  renderGates(r, 5);
+  const trace = $('#trace');
+  if (!r.trace) {
+    trace.innerHTML = '<p class="placeholder">No trace loaded for this view. Run export_dataset.py and serve the folder to see the tool calls.</p>';
+  } else {
+    trace.innerHTML = r.trace.map(eventHTML).join('') + `<div class="ev end in"><span class="i">·</span><span class="tool">${r.finished ? 'final reply' : 'stopped at step limit'}</span></div>`;
+    trace.querySelectorAll('.ev').forEach(e => e.classList.add('in'));
+  }
+  $('#replay-note').textContent = r.reads > 0
+    ? `This run suppressed ${r.reads} repeated read. The log records the count but not the step where it happened, so the marker is shown here rather than in the trace.`
+    : '';
+}
+
+function replay() {
+  clearLater();
+  const task = $('#f-task').value, mode = $('#f-mode').value, rep = Number($('#f-rep').value);
+  const r = getRun(task, mode, rep);
+  if (!r) return;
+  renderMeta(r, task, mode, rep);
+  renderTags(r);
+  renderGates(r, 0);
+  const trace = $('#trace');
+  if (!r.trace) { showRun(); return; }
+  trace.innerHTML = '';
+  const gap = REDUCED ? 0 : 380;
+  let t = 0;
+  r.trace.forEach((c, i) => {
+    later(() => {
+      trace.insertAdjacentHTML('beforeend', eventHTML(c, i));
+      const el = trace.lastElementChild;
+      requestAnimationFrame(() => el.classList.add('in'));
+      trace.scrollTop = trace.scrollHeight;
+    }, t);
+    t += gap;
+  });
+  later(() => {
+    trace.insertAdjacentHTML('beforeend', `<div class="ev end in"><span class="i">·</span><span class="tool">${r.finished ? 'final reply' : 'stopped at step limit'}</span></div>`);
+    trace.scrollTop = trace.scrollHeight;
+  }, t);
+  gateValues(r).forEach((_, i) => later(() => renderGates(r, i + 1), t + 250 + i * 260));
+  $('#replay-note').textContent = r.reads > 0
+    ? `This run suppressed ${r.reads} repeated read. The log records the count but not the step where it happened.`
+    : '';
+}
+
+function showAll() {
+  clearLater();
+  showRun();
+}
+
+/* ---------- benchmark ---------- */
+let bench = { view: 'aggregate', metric: 'prompt' };
+
+function barHTML(label, value, max, fmt, cls) {
+  const w = max ? (value / max) * 100 : 0;
+  return `<div class="bar-row"><span>${label}</span><div class="track"><div class="fill ${cls}" data-w="${w.toFixed(2)}"></div></div><span class="val">${fmt(value)}</span></div>`;
+}
+
+function animateFills(root) {
+  const fills = root.querySelectorAll('.fill[data-w]');
+  if (REDUCED) { fills.forEach(f => f.style.width = f.dataset.w + '%'); return; }
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    fills.forEach(f => f.style.width = f.dataset.w + '%');
+  }));
+}
+
+function renderBench() {
+  const out = $('#bench-out');
+  const m = METRICS[bench.metric];
+  const cls = ['', 'k2', 'k3'];
+  const legend = `<div class="legend"><span><i style="background:var(--muted)"></i>Baseline</span><span><i style="background:var(--text);opacity:.65"></i>Truncate-only</span><span><i style="background:var(--accent)"></i>Optimized</span></div>`;
+
+  if (bench.view === 'aggregate') {
+    const vals = MODES.map(md => AGG[md][bench.metric]);
+    const max = Math.max(...vals);
+    out.innerHTML = `<div class="bars">${MODES.map((md, i) => barHTML(MODE_LABEL[md], vals[i], max, m.fmt, cls[i])).join('')}</div>`
+      + `<p class="note">Averages over 20 runs per mode, from results.md.</p>`;
+  } else {
+    const sub = bench.metric === 'prompt' || bench.metric === 'cost' ? bench.metric : null;
+    if (!sub) {
+      out.innerHTML = '<p class="note">Per-task averages are recorded for prompt tokens and cost. Choose one of those.</p>';
+      return;
+    }
+    const all = TASK_IDS.flatMap(t => BYTASK[t][sub]);
+    const max = Math.max(...all);
+    out.innerHTML = legend + TASK_IDS.map(t => `
+      <p class="grp">${TASK_NAME[t]}</p>
+      <div class="bars">${MODES.map((md, i) => barHTML(MODE_LABEL[md], BYTASK[t][sub][i], max, sub === 'prompt' ? fmtInt : v => '$' + v.toFixed(4), cls[i])).join('')}</div>`).join('');
+  }
+  animateFills(out);
+}
+
+function setupBench() {
+  $('#metric').innerHTML = Object.entries(METRICS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  $('#metric').addEventListener('change', e => { bench.metric = e.target.value; renderBench(); });
+  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+    bench.view = b.dataset.view;
+    document.querySelectorAll('[data-view]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderBench();
+  }));
+  renderBench();
+}
+
+/* ---------- task 4 repeat reads ---------- */
+let reread = { mode: 'baseline', rep: 1 };
+
+function countReportReads(r) {
+  if (!r.trace) return null;
+  return r.trace.filter(c => c.tool === 'read_file' && c.args.includes('report_pkg/report.py')).length;
+}
+
+function renderDots() {
+  const rows = MODES.map(md => {
+    const dots = REPS.map(rep => {
+      const r = getRun('tr4_reject_discount', md, rep);
+      const sup = r && r.reads > 0 ? ' sup' : '';
+      const pressed = reread.mode === md && reread.rep === rep ? 'true' : 'false';
+      return `<button class="dot${sup}" type="button" data-mode="${md}" data-rep="${rep}" aria-pressed="${pressed}" aria-label="${MODE_LABEL[md]} repeat ${rep}">${rep}</button>`;
+    }).join('');
+    return `<div class="dotrow"><span class="lbl">${MODE_LABEL[md]}</span><div class="dots">${dots}</div></div>`;
+  }).join('');
+  $('#dots').innerHTML = rows;
+  $('#dots').querySelectorAll('button.dot').forEach(b => b.addEventListener('click', () => {
+    reread.mode = b.dataset.mode; reread.rep = Number(b.dataset.rep);
+    renderDots(); renderLane(true);
+  }));
+}
+
+function renderLane(animate) {
+  const r = getRun('tr4_reject_discount', reread.mode, reread.rep);
+  const lane = $('#lane');
+  if (!r) { lane.innerHTML = ''; return; }
+  const reads = countReportReads(r);
+  const readLabel = reads == null ? 'report.py read' : `report.py read (${reads} in trace)`;
+  const supLabel = r.reads > 0
+    ? `repeat read answered with unchanged note (×${r.reads})`
+    : 'repeat read returned in full (no suppression recorded)';
+  const steps = [
+    { k: '1', t: readLabel, cls: '' },
+    { k: '2', t: 'edit pricing.py, run tests', cls: '' },
+    { k: '3', t: 'report.py read again', cls: '' },
+    { k: '4', t: supLabel, cls: r.reads > 0 ? 'sup' : '' },
+  ];
+  lane.innerHTML = steps.map(s => `<div class="step ${s.cls}"><div class="k">step ${s.k}</div>${esc(s.t)}</div>`).join('');
+  const els = lane.querySelectorAll('.step');
+  if (animate && !REDUCED) {
+    els.forEach((el, i) => { later(() => el.classList.add('on'), i * 350); });
+  } else {
+    els.forEach(el => el.classList.add('on'));
+  }
+  $('#reread-note').textContent = r.reads > 0
+    ? `Run ${reread.rep} of ${MODE_LABEL[reread.mode].toLowerCase()} suppressed ${r.reads} repeat read. Step 4 shows what the logs record.`
+    : `Run ${reread.rep} of ${MODE_LABEL[reread.mode].toLowerCase()} did not suppress a read.`;
+}
+
+function setupReread() {
+  renderDots();
+  renderLane(false);
+  const obs = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { renderLane(true); obs.disconnect(); }
+  }), { threshold: 0.4 });
+  obs.observe($('#reread'));
+}
+
+/* ---------- truncation inspector ---------- */
+function setupTrunc() {
+  const list = DATA.runs.filter(r => r.truncated);
+  $('#trunc-select').innerHTML = list.map((r, i) => `<option value="${i}">${TASK_NAME[r.task]} · ${MODE_LABEL[r.mode]} · repeat ${r.rep}</option>`).join('');
+  $('#trunc-select').addEventListener('change', () => renderTrunc(list));
+  renderTrunc(list);
+}
+
+function renderTrunc(list) {
+  const out = $('#trunc-out');
+  const r = list[Number($('#trunc-select').value)];
+  if (!r) { out.innerHTML = '<p class="note">No truncated runs in the loaded data.</p>'; return; }
+  let body;
+  if (!r.trace) {
+    body = '<p class="note">The trace for this run is not loaded. Run export_dataset.py to see the call the optimizer applied to.</p>';
+  } else {
+    const idx = r.trace.findIndex(c => c.truncated);
+    const from = Math.max(0, idx - 1), to = Math.min(r.trace.length, idx + 2);
+    body = `<div class="trace" style="min-height:0">${r.trace.slice(from, to).map((c, j) => eventHTML(c, from + j)).join('')}</div>`;
+  }
+  out.innerHTML = `
+    <dl class="meta" style="margin-bottom:1rem">
+      <dt>run</dt><dd>${TASK_NAME[r.task]} · ${MODE_LABEL[r.mode]} · repeat ${r.rep}</dd>
+      <dt>prompt tokens</dt><dd>${r.prompt == null ? 'not in dataset' : fmtInt(r.prompt)}</dd>
+    </dl>
+    ${body}
+    <p class="note">The log records that truncation ran on this tool result. It does not record the full output or the shortened text, so only the call and its neighbours are shown here.</p>`;
+}
+
+/* ---------- static gates ---------- */
+function fillGatesStatic() {
+  const el = $('#gates-static');
+  const labels = [['01', 'Finished'], ['02', 'Target tests'], ['03', 'Protected'], ['04', 'Scope'], ['05', 'Result']];
+  el.innerHTML = labels.map(([n, l]) => `<div class="gate"><div class="n">${n}</div><div>${l}</div><div class="s pass">PASS</div></div>`).join('');
+  [...el.children].forEach((g, i) => later(() => g.classList.add('on'), i * 220));
+}
+
+/* ---------- results table ---------- */
+function renderTaskTable() {
+  const head = `<tr><th>Task</th>${MODES.map(md => `<th class="n">${MODE_LABEL[md]} prompt</th>`).join('')}<th class="n">Baseline cost</th><th class="n">Truncate-only cost</th><th class="n">Optimized cost</th></tr>`;
+  const body = TASK_IDS.map(t => {
+    const p = BYTASK[t].prompt, c = BYTASK[t].cost;
+    return `<tr><td>${TASK_NAME[t]}</td>${p.map(v => `<td class="n">${fmtInt(v)}</td>`).join('')}`
+      + `<td class="n">$${c[0].toFixed(4)}</td><td class="n">$${c[1].toFixed(4)}</td><td class="n">$${c[2].toFixed(4)}</td></tr>`;
+  }).join('');
+  $('#task-table').innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+}
+
+/* ---------- boot ---------- */
+(async function boot() {
+  await loadData();
+  fillSelectors();
+  showRun();
+  setupBench();
+  setupReread();
+  setupTrunc();
+  renderTaskTable();
+  setupMotion();
+})();
+})();
+</script>
+</body>
+</html>
