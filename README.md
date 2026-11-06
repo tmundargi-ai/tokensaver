@@ -63,7 +63,7 @@ The evaluator resets the repo and runs the tests itself. The model saying "done"
 You need Python 3.9 or newer, git, and a Meta Model API key with credits. I developed this on Windows using WSL (Ubuntu) with Python 3.14.
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/tokensaver.git
+git clone https://github.com/tmundargi-ai/tokensaver.git
 cd tokensaver
 python3 -m venv .venv
 source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
